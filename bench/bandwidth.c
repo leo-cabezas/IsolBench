@@ -36,11 +36,7 @@
  * Public Definitions
  **************************************************************************/
 #define CACHE_LINE_SIZE 64	   /* cache Line size is 64 byte */
-#ifdef __arm__
-#  define DEFAULT_ALLOC_SIZE_KB 4096
-#else
-#  define DEFAULT_ALLOC_SIZE_KB 16384
-#endif
+#define DEFAULT_ALLOC_SIZE_KB 16384
 
 /**************************************************************************
  * Public Types
@@ -105,7 +101,8 @@ int bench_write()
 void usage(int argc, char *argv[])
 {
 	printf("Usage: $ %s [<option>]*\n\n", argv[0]);
-	printf("-m: memory size in KB. deafult=8192\n");
+	printf("-k: memory size in KB. default=%d KB\n", DEFAULT_ALLOC_SIZE_KB);
+	printf("-m: memory size in MB. default=%d MB\n", DEFAULT_ALLOC_SIZE_KB/1024);
 	printf("-a: access type - read, write. default=read\n");
 	printf("-n: addressing pattern - Seq, Row, Bank. default=Seq\n");
 	printf("-t: time to run in sec. 0 means indefinite. default=5. \n");
@@ -139,10 +136,13 @@ int main(int argc, char *argv[])
 	/*
 	 * get command line options 
 	 */
-	while ((opt = getopt(argc, argv, "m:a:n:t:c:i:p:r:f:l:xh")) != -1) {
+	while ((opt = getopt(argc, argv, "k:m:a:n:t:c:i:p:r:f:l:xh")) != -1) {
 		switch (opt) {
-		case 'm': /* set memory size */
+		case 'k': /* set memory size */
 			g_mem_size = 1024 * strtol(optarg, NULL, 0);
+			break;
+		case 'm': /* set memory size */
+			g_mem_size = 1024 * 1024 * strtol(optarg, NULL, 0);
 			break;
 		case 'a': /* set access type */
 			if (!strcmp(optarg, "read"))
@@ -197,14 +197,27 @@ int main(int argc, char *argv[])
 	 * allocate contiguous region of memory 
 	 */ 
 	if (use_hugepage) {
+		// try 1GB hugepage first
 		g_mem_ptr = (int *)mmap(0,
 				       g_mem_size,
 				       PROT_READ | PROT_WRITE,
-				       MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB,
+				       MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | (30 << MAP_HUGE_SHIFT),
 				       -1, 0);
 		if ((void *)g_mem_ptr == MAP_FAILED) {
-			perror("alloc failed");
-			exit(1);
+			// fallback to 2MB (or 32MB in pi 5?) hugepage
+			g_mem_ptr = (int *)mmap(0,
+					       g_mem_size,
+					       PROT_READ | PROT_WRITE,
+					       MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB,
+					       -1, 0);
+			if ((void *)g_mem_ptr == MAP_FAILED) {
+				perror("mmap with hugepage failed");
+				exit(1);
+			} else {
+				printf("Using 2MB hugepage\n");
+			}
+		} else {
+			printf("Using 1GB hugepage\n");
 		}
 	} else {
 		g_mem_ptr = (int *)malloc(g_mem_size);
