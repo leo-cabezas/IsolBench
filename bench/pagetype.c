@@ -307,7 +307,10 @@ static unsigned long pagemap_pfn(uint64_t val)
 #define BITOP_WORD(nr)		((nr) / BITS_PER_LONG)
 #define PAGE_SHIFT 12
 
-static unsigned long palloc_bitmask = 0xc000;
+#define MAX_BANK_FUNCTIONS 16
+#define MAX_BITS_PER_FUNCTION 32
+static int g_bank_function_cnt = 0;
+static uint64_t g_bank_functions[MAX_BANK_FUNCTIONS]; // each function is represented as a bitmask
 
 /**
  * __ffs - find first set bit in word
@@ -409,34 +412,21 @@ found_middle:
 static inline int pfn_to_color(uint64_t pfn)
 {
 	int color = 0;
-	int idx = 0;
-	int c;
-	for_each_set_bit(c, &palloc_bitmask, sizeof(unsigned long) * 8) {
-		if ((pfn >> (c - PAGE_SHIFT)) & 0x1)
-			color |= (1<<idx);
-		idx++;
+	int bit_pos = 0;
+	for (size_t func_idx = 0; func_idx < g_bank_function_cnt; func_idx++) {
+		int bit_result = 0;
+
+		// XOR all the specified bits for this function
+		for_each_set_bit(bit_pos, &g_bank_functions[func_idx], BITS_PER_LONG) {
+			bit_result ^= ((pfn >> (bit_pos - PAGE_SHIFT)) & 0x1);
+		}
+		// Set the corresponding bit in the color
+		if (bit_result) {
+			color |= (1 << func_idx);
+		}
 	}
 	return color;
 }
-
-#if 0
-static char *dram_map(uint64_t pfn)
-{
-	static char buf[65];
-	
-	/* TODO: fixme */
-	int dram_bank_shift = 12;
-	uint64_t dram_bank_mask = 0x3;
-	int dram_rank_shift = 19;
-	uint64_t dram_rank_mask = 0x3;
-	sprintf(buf, "rank[%d]=%ld bank[%d]=%ld",
-		dram_rank_shift,
-		(pfn >> (dram_rank_shift - PAGE_SHIFT)) & dram_rank_mask,
-		dram_bank_shift,
-		(pfn >> (dram_bank_shift - PAGE_SHIFT)) & dram_bank_mask);
-	return buf;
-}
-#endif
 
 /*
  * page flag names
@@ -934,8 +924,42 @@ static void parse_pid(const char *str)
 	fclose(file);
 }
 
-static void parse_file(const char *name)
+static void parse_map_file(const char *filename)
 {
+    FILE* fp = fopen(filename, "r");
+    if (!fp) {
+        fprintf(stderr, "Error: Cannot open map file %s\n", filename);
+        exit(1);
+    }
+
+    char line[256];
+    int function_index = 0;
+
+    while (fgets(line, sizeof(line), fp)) {
+        // Skip empty lines and comments
+        if (line[0] == '\n' || line[0] == '#') continue;
+        char* token = strtok(line, " \t\n");
+        int bit_index = 0;
+        while (token != NULL && bit_index < MAX_BITS_PER_FUNCTION) {
+            g_bank_functions[function_index] |= (1 << atoi(token));
+            token = strtok(NULL, " \t\n");
+            bit_index++;
+        }
+        function_index++;
+        if (function_index >= MAX_BANK_FUNCTIONS) break;
+    }
+	g_bank_function_cnt = function_index;
+    fclose(fp);
+	// Print loaded bank mapping functions
+	printf("Loaded %d bank mapping functions:\n", g_bank_function_cnt);
+	for (int i = 0; i < g_bank_function_cnt; i++) {
+		int bit_index;
+		printf("Function %u: XOR bits ", i);
+		for_each_set_bit(bit_index, &g_bank_functions[i], BITS_PER_LONG) {
+			printf("%d ", bit_index);
+		}
+		printf("\n");
+	}
 }
 
 static void parse_addr_range(const char *optarg)
@@ -1068,12 +1092,8 @@ int main(int argc, char *argv[])
 	page_size = getpagesize();
 
 	while ((c = getopt_long(argc, argv,
-				"k:rp:f:a:b:lLNXxh", opts, NULL)) != -1) {
+				"rp:f:a:b:lLNXxh", opts, NULL)) != -1) {
 		switch (c) {
-                case 'k':
-                        palloc_bitmask = strtol(optarg, NULL, 0);
-                        printf("palloc_bitmask = 0x%lx\n", palloc_bitmask);
-			break;
 		case 'r':
 			opt_raw = 1;
 			break;
@@ -1081,7 +1101,7 @@ int main(int argc, char *argv[])
 			parse_pid(optarg);
 			break;
 		case 'f':
-			parse_file(optarg);
+			parse_map_file(optarg);
 			break;
 		case 'a':
 			parse_addr_range(optarg);
