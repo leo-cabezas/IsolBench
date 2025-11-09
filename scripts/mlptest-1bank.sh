@@ -13,7 +13,8 @@ fi
 
 mlp=$1
 corun=$2
-memsize=128 # in MB
+memsize=512 # in MB
+unitsize=64
 
 echoerr() { echo "$@" 1>&2; }
 
@@ -26,10 +27,10 @@ killall pll >& /dev/null
 
 for l in `seq 1 $mlp`; do
     for c in `seq $c_start $c_end`; do
-	    pll -c $c -l $l -i 1000000 -m $memsize -f map.txt -e 0 >& /tmp/pll-$l-$c.log &
+	    pll -c $c -l $l -u $unitsize -i 1000000 -m $memsize -f map.txt -e 0 >& /tmp/pll-$l-$c.log &
     done
     sleep 0.5
-    pll -c $st -l $l -i 50 -m $memsize -f map.txt -e 0 2> /tmp/err.txt
+    pll -c $st -l $l -u $unitsize -i 10 -m $memsize -f map.txt -e 0 2> /tmp/err.txt
 
     if grep -qi "alloc failed" /tmp/err.txt; then
         echo "Error: Failed to allocate memory for mlp $l, please allocate more hugepages." >&2
