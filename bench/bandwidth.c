@@ -46,7 +46,7 @@ enum access_type { READ, WRITE};
 /**************************************************************************
  * Global Variables
  **************************************************************************/
-int g_mem_size = DEFAULT_ALLOC_SIZE_KB * 1024;	   /* memory size */
+int64_t g_mem_size = DEFAULT_ALLOC_SIZE_KB * 1024;	   /* memory size */
 int *g_mem_ptr = 0;		   /* pointer to allocated memory region */
 
 volatile uint64_t g_nread = 0;	           /* number of bytes read */
@@ -79,7 +79,7 @@ void quit(int param)
 
 int64_t bench_read()
 {
-	int i;	
+	int64_t i;	
 	int64_t sum = 0;
 	for ( i = 0; i < g_mem_size/4; i+=(CACHE_LINE_SIZE/4) ) {
 		sum += g_mem_ptr[i];
@@ -90,7 +90,7 @@ int64_t bench_read()
 
 int bench_write()
 {
-	register int i;	
+	register int64_t i;	
 	for ( i = 0; i < g_mem_size/4; i+=(CACHE_LINE_SIZE/4) ) {
 		g_mem_ptr[i] = i;
 	}
@@ -136,13 +136,15 @@ int main(int argc, char *argv[])
 	/*
 	 * get command line options 
 	 */
-	while ((opt = getopt(argc, argv, "k:m:a:n:t:c:i:p:r:f:l:xh")) != -1) {
+	while ((opt = getopt(argc, argv, "m:a:n:t:c:i:p:r:f:l:xh")) != -1) {
 		switch (opt) {
-		case 'k': /* set memory size */
-			g_mem_size = 1024 * strtol(optarg, NULL, 0);
-			break;
 		case 'm': /* set memory size */
-			g_mem_size = 1024 * 1024 * strtol(optarg, NULL, 0);
+			if (optarg[strlen(optarg)-1] == 'G' || optarg[strlen(optarg)-1] == 'g')
+				g_mem_size = 1024 * 1024 * 1024 * strtol(optarg, NULL, 0);
+			else if (optarg[strlen(optarg)-1] == 'M' || optarg[strlen(optarg)-1] == 'm')
+				g_mem_size = 1024 * 1024 * strtol(optarg, NULL, 0);
+			else
+				g_mem_size = 1024 * strtol(optarg, NULL, 0);
 			break;
 		case 'a': /* set access type */
 			if (!strcmp(optarg, "read"))
@@ -234,7 +236,7 @@ int main(int argc, char *argv[])
 		g_mem_ptr[i] = i;
 
 	/* print experiment info before starting */
-	printf("memsize=%d KB, type=%s, cpuid=%d\n",
+	printf("memsize=%ld KB, type=%s, cpuid=%d\n",
 	       g_mem_size/1024,
 	       ((acc_type==READ) ?"read": "write"),
 		cpuid);
