@@ -79,7 +79,7 @@ void quit(int param)
 
 int64_t bench_read()
 {
-	int64_t i;	
+	int64_t i;
 	int64_t sum = 0;
 	for ( i = 0; i < g_mem_size/4; i+=(CACHE_LINE_SIZE/4) ) {
 		sum += g_mem_ptr[i];
@@ -90,7 +90,7 @@ int64_t bench_read()
 
 int bench_write()
 {
-	register int64_t i;	
+	register int64_t i;
 	for ( i = 0; i < g_mem_size/4; i+=(CACHE_LINE_SIZE/4) ) {
 		g_mem_ptr[i] = i;
 	}
@@ -101,20 +101,15 @@ int bench_write()
 void usage(int argc, char *argv[])
 {
 	printf("Usage: $ %s [<option>]*\n\n", argv[0]);
-	printf("-k: memory size in KB. default=%d KB\n", DEFAULT_ALLOC_SIZE_KB);
-	printf("-m: memory size in MB. default=%d MB\n", DEFAULT_ALLOC_SIZE_KB/1024);
-	printf("-a: access type - read, write. default=read\n");
-	printf("-n: addressing pattern - Seq, Row, Bank. default=Seq\n");
-	printf("-t: time to run in sec. 0 means indefinite. default=5. \n");
-	printf("-x: use hugepage. default=0\n");
-	printf("-r: set real-time priority. default=0\n");
-	printf("     1(low)- 99(high) for SCHED_FIFO\n");
-	printf("-c: CPU to run.\n");
-	printf("-i: iterations. 0 means intefinite. default=0\n");
-	printf("-p: priority\n");
-	printf("-l: log label. use together with -f\n");
-	printf("-f: log file name\n");
-	printf("-h: help\n");
+	printf("-m <int>[M|G] : memory size in KB. default=%d KB. appending M or G will interpret the number as MB or GB respectively.\n", DEFAULT_ALLOC_SIZE_KB);
+	printf("-a <read|write>	: access type - read, write. default=read\n");
+	printf("-t <int> : time to run in sec. 0 means indefinite. default=5. \n");
+	printf("-x : use hugepage.\n");
+	printf("-r <int> : set real-time priority. default=0; 1(low)- 99(high) for SCHED_FIFO\n");
+	printf("-c <int> : CPU to run.\n");
+	printf("-i <int> : iterations. 0 means intefinite. default=0\n");
+	printf("-p <int> : CFS priority (nice value). -20 (highest)..19 (lowest) \n");
+	printf("-h : help\n");
 	printf("\nExamples: \n$ bandwidth -m 8192 -a read -t 1 -c 2\n  <- 8MB read for 1 second on CPU 2\n");
 	exit(1);
 }
@@ -136,7 +131,7 @@ int main(int argc, char *argv[])
 	/*
 	 * get command line options 
 	 */
-	while ((opt = getopt(argc, argv, "m:a:n:t:c:i:p:r:f:l:xh")) != -1) {
+	while ((opt = getopt(argc, argv, "m:a:t:c:i:p:r:xh")) != -1) {
 		switch (opt) {
 		case 'm': /* set memory size */
 			if (optarg[strlen(optarg)-1] == 'G' || optarg[strlen(optarg)-1] == 'g')
